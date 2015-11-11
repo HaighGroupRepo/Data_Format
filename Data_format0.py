@@ -1,10 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Oct  7 09:50:02 2015
-
-@author: YcW
-"""
-
 import hyperspy.hspy as hspy
 import hyperspy.axes as haxes
 #import hyperspy.api as hs
@@ -13,7 +6,6 @@ import glob
 import os
 import numpy as np
 import re
-
 
 class Acquisition(object):
     def __init__(self, path):        
@@ -156,25 +148,15 @@ class Experiment(object):
         
     def save(self, filename, e_data):
         """Function to save all data associated with an experiment into group '/experimental_data'."""
-        """Initializer to meet the EMD format specification"""
         
         f = h5py.File(filename, 'w')
         f.attrs['version_major'] = 0  #EMD format required
         f.attrs['version_minor'] = 2  #EMD format required
         grp_e = f.create_group('experimental_data')
-
         grp_m = f.create_group('microscope')  #EMD format recommended
-        #for key, value in self.microscope.items():
-        #    grp_e.aattrs[key] = value
         grp_s = f.create_group('sample')  #EMD format recommended
-        #for key, value in self.sample.items():
-        #    grp_e.aattrs[key] = value
         grp_u = f.create_group('user')  #EMD format recommended
-        #for key, value in self.user.items():
-        #    grp_e.aattrs[key] = value
         grp_c = f.create_group('comments')  #EMD format recommended 
-        #for key, value in self.comments.items():
-        #    grp_e.aattrs[key] = value
         
         for ac_key, ac_val in e_data.ac.items():
             ac_grp = grp_e.create_group('ac{}'.format(ac_key))  #create acqusition group named as 'ac1', 'ac2' etc.
