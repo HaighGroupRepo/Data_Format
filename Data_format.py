@@ -1,4 +1,9 @@
-#Change
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Oct  7 09:50:02 2015
+
+@author: YcW
+"""
 
 import hyperspy.hspy as hspy
 import hyperspy.axes as haxes
@@ -10,16 +15,54 @@ import numpy as np
 import re
 
 class Acquisition(object):
+    accept_type = ['dm3', 'dm4', 'h5', 'hdf5', 'rpl', 'tif', 'tiff']
+    # .raw shouldn't be inclued in the list because they are linked with .rpl for EDS data. Only .rpl should be loaded. 
     def __init__(self, path):        
         folder = []        
         if type(path) == h5py._hl.group.Group:  #read file
             folder = path.values()
         else:  #directly load file
             folder = [os.path.join(path, f) for f in os.listdir(path) if (os.path.isfile(os.path.join(path, f)) and ('.DS_Store' not in f))]    
-        #folder is a list that contains path of each file in the folder
-        #delet the hidden folder '.DS_Store' in MacOS
+            #folder is a list that contains pathes of each file in the folder
+            #delet the hidden folder '.DS_Store' in MacOS
+            self.support_formats(folder) # check if data type in this folder can be loaded by Hyperspy
+            
         
         for filename in folder:
+            #temperary lines for PtNi particles.
+            """if filename.rpartition('.')[2] == 'tif':
+                self.haadf = hspy.load(filename)
+                for i in range(2):
+                    if i == 0:        
+                        self.haadf.axes_manager[i].name='X'
+                        self.haadf.axes_manager[i].units='nm'
+                        self.haadf.axes_manager[i].scale=0.275
+                        self.haadf.axes_manager[i].navigate=True
+                    elif i == 1:
+                        self.haadf.axes_manager[i].name='Y'
+                        self.haadf.axes_manager[i].units='nm'
+                        self.haadf.axes_manager[i].scale=0.275
+                        self.haadf.axes_manager[i].navigate=True
+            if filename.rpartition('.')[2] == 'rpl':
+                self.eds = hspy.load(filename)
+                self.eds.set_signal_type('EDS_TEM')
+                self.eds.set_microscope_parameters(beam_energy = 200)
+                for i in range(3):
+                    if i == 0:        
+                        self.eds.axes_manager[i].name='X'
+                        self.eds.axes_manager[i].units='nm'
+                        self.eds.axes_manager[i].scale=0.275
+                    elif i == 1:
+                        self.eds.axes_manager[i].name='Y'
+                        self.eds.axes_manager[i].units='nm'
+                        self.eds.axes_manager[i].scale=0.275
+                    elif i == 2:
+                        self.eds.axes_manager[i].name='Energy'
+                        self.eds.axes_manager[i].units='keV'
+                        self.eds.axes_manager[i].scale=0.01
+                        self.eds.axes_manager[i].offset=-0.477"""
+            #temperary lines end            
+            #original lines       
             type_check = self.load_check(filename)
             if type_check == None:
                 print "Data name: %s" % hspy.load(filename).metadata.General.original_filename
@@ -104,13 +147,20 @@ class Acquisition(object):
             units = re.findall('[^_\W]+', dim.attrs.get('units', ''))
             signal.axes_manager[i].units = ''.join(units)
         #extract metadata:
-        group_metadata = {}
-        for key, value in group.attrs.items():
-            group_metadata[key] = value
-        signal.metadata.General.title = record_by
+        #group_metadata = {}
+        #for key, value in group.attrs.items():
+        #    group_metadata[key] = value
+        #signal.metadata.General.title = record_by
         
         return (signal)
 
+    def support_formats(self, folder_list):
+        """Check formats of data in this folder_list"""
+        for data in folder_list:
+            if data.rpartition('.')[2] not in Acquisition.accept_type:
+                folder_list.remove(data)
+        return (folder_list)   
+        
        
 class ExperimentalData(object):
     """Container class for experimental data associated with a particular experiment."""
@@ -142,23 +192,50 @@ class ExperimentalData(object):
 
 
 class Experiment(object):
+    
+    """def __init__(self, experimental_data={}, microscope={}, sample={}, user={},comments={}):       
+        #make sure some default keys are present:
+        for key in ['name', 'voltage']:
+            if key not in microscope:
+                microscope[key] = ''
+        self.microscope = microscope        
+        for key in ['material', 'preparation']:
+            if key not in sample:
+                sample[key] = ''
+        self.sample = sample        
+        for key in ['name', 'department', 'institution', 'contact(email)']:
+            if key not in user:
+                user[key] = ''
+        self.user = user
+        #add comments:
+        self.comments = comments""" 
+    
     def load_experimental_data(self, exp_data):
         """Function to load experimental data to the experiment.
         Example: Experiment.load_experimental_data(experimental_data)"""
         
         self.e_data = exp_data
         
-    def save(self, filename, e_data):
+    def save_as_EMD(self, e_data, filename='HDFdata.h5'):
         """Function to save all data associated with an experiment into group '/experimental_data'."""
         
         f = h5py.File(filename, 'w')
         f.attrs['version_major'] = 0  #EMD format required
         f.attrs['version_minor'] = 2  #EMD format required
         grp_e = f.create_group('experimental_data')
+
         grp_m = f.create_group('microscope')  #EMD format recommended
+        #for key, value in self.microscope.items():
+        #    grp_e.aattrs[key] = value
         grp_s = f.create_group('sample')  #EMD format recommended
+        #for key, value in self.sample.items():
+        #    grp_e.aattrs[key] = value
         grp_u = f.create_group('user')  #EMD format recommended
+        #for key, value in self.user.items():
+        #    grp_e.aattrs[key] = value
         grp_c = f.create_group('comments')  #EMD format recommended 
+        #for key, value in self.comments.items():
+        #    grp_e.aattrs[key] = value
         
         for ac_key, ac_val in e_data.ac.items():
             ac_grp = grp_e.create_group('ac{}'.format(ac_key))  #create acqusition group named as 'ac1', 'ac2' etc.
@@ -182,16 +259,86 @@ class Experiment(object):
                         else:
                             dset.attrs[keys] = str(vals)
                         
-    def read(self, filename):
-        self.r = h5py.File(filename, 'r')
-        def func_1(path):  #  define a callable func for .visit(func)
-            if 'experimental_data' in path:
-                return path
-        p = self.r.visit(func_1)  #find the path of the group 'experimental_data'
-        AC_folders = self.r[p].values()  #it's a list of groups within the group 'experimental_data'   
-        self.e_data = ExperimentalData(AC_folders)
+    def read(self, filename):  
+         """Load EMD/HDF file into computer as callable Hyperspy variables"""
+         self.r = h5py.File(filename, 'r')
+         def func_1(path):  #  define a callable func for .visit(func)
+             if 'experimental_data' in path:
+                 return path
+         p = self.r.visit(func_1)  #find the path of the group 'experimental_data'
+         AC_folders = self.r[p].values()  #it's a list of groups within the group 'experimental_data'   
+         self.e_data = ExperimentalData(AC_folders)
     
 
+
+            
+            
+            
+    
+"""        
+        #  define a callable func for .visititems(func)
+        mylist = []
+        def func_2(name, obj):
+            if instance(obj, h5py._hl.group.Group):
+                mylist.append(name)
+        AC_folder = p.visititems(func_2)  #  return a list of groups
+"""
+"""    
+    lst = ['contain all grp_names']
+"""   
+
+"""
+
+# Get a list of all datasets in the file
+        >>> mylist = []
+        >>> def func(name, obj):
+        ...     if isinstance(obj, h5py._hl.dataset.Dataset):
+        ...         mylist.append(name)
+        ...
+        >>> f = File('foo.hdf5')
+        >>> f.visititems(func)
+        
+"""
+       
+"""                    
+    def data_axes(self, data):
+       Function to save axes data (data of 'axes_manager' in hyperspy)
+
+        axes_data = data.axes_manager
+        axes_dict = data.axes_magager.as_dictionary()
+        scale = axex_
+
+    def attributes(self, dictionary):
+        Function to extract and save attributes        
+
+        for d in dictionary:
+            {d: dictionary.get(d, None) for d in ('axis-0', 'axis-1', 'axis-2')}
+""" 
+  
+"""    
+    FileInfo = {}      
+    def visit_all_objects(group, path):
+        for i in group.items():
+            if isinstance(i[1], h5py.Group):
+                visit_all_objects(i[1], path + '/' + i[0])
+            else:
+                Dataset_name = path + '/' + i[0]
+                FileInfo[Dataset_name] = (group[Dataset_name].shape, group[Dataset_name].dtype, group[Dataset_name].attrs.listitems())
+    #  print dataset paths and info to screen
+        for (k, v) in FileInfo.items():
+            print k, v
+""" 
+def save_s(self, e_data):
+        """Function to save infomation into group '/sample'."""
+        
+        
+def save_u(self, e_data):
+        """Function to save infomation into group '/user'."""
+        
+def save_c(self, e_data):
+        """Function to save infomation into group '/comments'."""
+        
+        
 
         
         
